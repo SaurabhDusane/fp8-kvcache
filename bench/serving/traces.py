@@ -126,9 +126,25 @@ def _single_turn_sessions(turns: list[Turn]) -> list[Session]:
 
 # --------------------------------------------------------------------------- ShareGPT
 
+_SHAREGPT_CACHE: dict[str, Any] = {}
+
+
 def load_sharegpt_pairs() -> list[tuple[str, str]]:
-    """(first human message, first gpt reply) pairs. Tries ``datasets`` (HF-cached), then a
-    direct hub download of the JSON (also HF-cached). Raises if neither works."""
+    """(first human message, first gpt reply) pairs, loaded once per process (a failure is
+    cached too, so sweeps don't retry a large download on every run)."""
+    if "pairs" not in _SHAREGPT_CACHE and "error" not in _SHAREGPT_CACHE:
+        try:
+            _SHAREGPT_CACHE["pairs"] = _load_sharegpt_pairs_uncached()
+        except Exception as exc:
+            _SHAREGPT_CACHE["error"] = exc
+    if "error" in _SHAREGPT_CACHE:
+        raise _SHAREGPT_CACHE["error"]
+    return _SHAREGPT_CACHE["pairs"]
+
+
+def _load_sharegpt_pairs_uncached() -> list[tuple[str, str]]:
+    """Tries ``datasets`` (HF-cached), then a direct hub download of the JSON (also HF-cached).
+    Raises if neither works."""
     errors = []
     try:
         import datasets

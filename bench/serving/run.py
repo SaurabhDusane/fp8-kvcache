@@ -15,6 +15,7 @@ import argparse
 import asyncio
 import math
 import sys
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -87,7 +88,12 @@ def trace_options(args: argparse.Namespace) -> dict[str, Any]:
     return {}
 
 
-def run(args: argparse.Namespace) -> dict[str, Any]:
+def run(args: argparse.Namespace, extra_config: dict[str, Any] | None = None,
+        ) -> tuple[dict[str, Any], Path | None]:
+    """Run one benchmark; returns (metrics, saved result path or None).
+
+    ``extra_config`` is merged into the saved config (used by sweeps for sweep id, kv dtype,
+    rate, repeat, server info)."""
     model, served = resolve_model(args.base_url, args.model)
     tok = load_tokenizer(args.tokenizer or model)
     trace = build_trace(args.trace, tok, args.num_requests, seed=args.seed,
@@ -125,11 +131,12 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         config = {k: (str(v) if isinstance(v, float) and not math.isfinite(v) else v)
                   for k, v in vars(args).items()}
         config.update(model=model, served_models=served, trace_stats=stats,
-                      arrival_mode=mode)
+                      arrival_mode=mode, **(extra_config or {}))
         path = save_result(f"serving_{trace.name}", config,
                            {**metrics, "records": [r.to_dict() for r in records]}, gpu)
         print(f"saved: {path}")
-    return metrics
+        return metrics, path
+    return metrics, None
 
 
 def main(argv: list[str] | None = None) -> int:

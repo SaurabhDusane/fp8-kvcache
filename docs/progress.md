@@ -142,3 +142,40 @@ waiting on a local run, open issues, next step.
 
 **Next step**
 - P5: baseline sweep (fp16 vs fp8 KV cache).
+
+## 2026-10-02 · Day 2 · P5 Baseline sweep (FP16 vs FP8 KV cache)
+
+**Done**
+- `scripts/run_baseline_sweep.py`: per `--kv-cache-dtype` (auto, fp8) launches
+  `vllm serve <model> --kv-cache-dtype D --max-model-len 4096 --gpu-memory-utilization 0.85
+  --port 8000` (+ only `--server-arg`s given explicitly), polls `/health`, runs each trace over
+  its rate list with 3 repeats per rate, then shuts the server down (SIGINT → SIGTERM → SIGKILL
+  on the process group). Server logs saved to `bench/results/raw/<date>/vllm_logs/`; "GPU KV
+  cache size", "Maximum concurrency", "Available KV cache memory" parsed into every run's config.
+  Start failures / mid-sweep crashes are reported with the log's traceback and the sweep moves
+  on; no setting is ever changed. Ctrl-C saves what was measured.
+- Rate plan (`bench/serving/sweep.py`): ascending rate list; a point is collapsed when median
+  SLO attainment < 50%; one more point after the first collapse, then stop; if the list ends
+  without collapse, keep doubling up to `--max-rate` (logged). Requests per run ≈ 45 s of
+  arrivals (30–300). Seeds depend on (rate, repeat) only: same workload across configs, new
+  prompts per run (no prefix-cache carry-over). Best-effort `/reset_prefix_cache` before runs.
+- `bench/results/summary/baseline.md` generated from saved JSON (`--summarize-only <id>` to
+  regenerate): server configs + verbatim KV log lines, saturation (peak goodput, first collapsed
+  rate), per-trace tables (median and min–max over repeats), throttled repeats, plan decisions.
+- `scripts/plot_baseline.py`: per trace, TTFT p50/p99, ITL p50/p99, goodput vs rate; one color
+  per dtype (validated palette), error bars = min–max over repeats, SLO lines.
+
+**Verified on CPU**
+- 106 passed. vLLM log parsing (V1 lines with ANSI codes, V0 lines), error extraction, rate plan
+  (collapse stop, extension, max rate, no-extend), aggregation + saturation + markdown on fixtures.
+- Server lifecycle with a fake `vllm` executable: start/parse/stop, crash with traceback,
+  startup timeout, missing binary. Full sweep end to end with the fake `vllm` (fp8 forced to
+  fail → reported, auto measured, baseline.md + PNGs produced).
+
+**Waiting on local run**
+- Full sweep, plots, baseline.md: TODO (paste).
+- Not verified: real vLLM log line formats for this vLLM version; SIGINT shutdown frees VRAM
+  before the next config starts.
+
+**Next step**
+- Write docs/baseline.md from the pasted baseline.md.
