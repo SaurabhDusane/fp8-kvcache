@@ -179,3 +179,36 @@ waiting on a local run, open issues, next step.
 
 **Next step**
 - Write docs/baseline.md from the pasted baseline.md.
+
+## 2026-10-02 · Day 3 · P6 decision + P7 Cache, FP8 utils, reference
+
+**Decisions (Saurabh, P6):** layout **NHD, stride-generic** (logical
+`[num_blocks, block_size, num_kv_heads, head_dim]`; consumers use strides; HND available as a
+physical layout for experiments). FP8 scales **per KV head**, static, fp32, shape
+`[num_kv_heads]` (per-tensor = broadcast of one value).
+
+**Done**
+- `src/kvcache/cache/fp8.py`: e4m3fn, scale = amax / 448 (zero group → 1.0, NaN ignored),
+  clamp to ±448 before the cast; dequantize in fp32. Granularity inferred from the scale's rank:
+  tensor `[]`, kv_head `[H]` (default), block_head `[NB, H]`, token_head `[NB, BS, H]`, all
+  supported in quantize/dequantize and the reference so they can be evaluated later.
+- `src/kvcache/cache/paged.py`: `allocate_kv_cache` (NHD or HND memory, logical NHD view),
+  `assign_blocks` (random non-contiguous blocks, block 0 reserved as null/padding as in vLLM V1),
+  `build_paged_kv_cache` (fp16/bf16/fp32/fp8; NaN poison in null, free and tail slots),
+  `gather_kv`, `PagedKVCache` with `strides()` for launchers.
+- `src/kvcache/reference/decode_attention.py`: `paged_decode_attention(q, k_cache, v_cache,
+  block_tables, context_lens, sm_scale, k_scale, v_scale)` in fp32 with GQA (HF repeat_kv
+  mapping), fp16 or fp8 + scales; `dense_decode_attention_sdpa` via torch SDPA.
+
+**Verified on CPU**
+- 40 CPU tests: paged vs SDPA at atol=rtol=1e-5 over head_dim {64,128} × GQA {1,4,6,8} ×
+  block size {16,32} with ragged lengths incl. 1 and non-multiples; NHD vs HND identical; fp8
+  reference equals SDPA on the dequantized cache for all granularities; e4m3 round-trip error
+  bound (2^-4 relative / 2^-10·scale subnormal) for all granularities; clamping; poison never read.
+- Mutation checks: wrong GQA mapping fails 17 tests, wrong block order fails 20.
+
+**Waiting on local run**
+- The same tests on CUDA (`-m gpu`, plus the 32k-context `slow` case).
+
+**Next step**
+- P8: capture real KV from the model.
