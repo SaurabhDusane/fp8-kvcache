@@ -145,7 +145,10 @@ def check_on_cache(spec: KernelSpec, q: torch.Tensor, cache, sm_scale: float) ->
     scales = dict(k_scale=cache.k_scale, v_scale=cache.v_scale) if cache.is_fp8 else {}
     before = [_bits(t) for t in (q, cache.key_cache, cache.value_cache, cache.block_tables,
                                  cache.context_lens)]
-    out = spec(*args, **scales)
+    try:
+        out = spec(*args, **scales)
+    except NotImplementedError as exc:  # scaffolded kernel: visible as a skip, suite stays green
+        pytest.skip(f"{spec.name} not implemented yet: {exc}")
     if q.is_cuda:
         torch.cuda.synchronize()
     ref = paged_decode_attention(*args, **scales)
@@ -276,6 +279,14 @@ def test_harness_accepts_reference_kernel(case: Case) -> None:
 def test_harness_rejects_broken_kernels(bad, case: Case, match: str) -> None:
     with pytest.raises(AssertionError, match=match):
         check_kernel(KernelSpec("broken", bad, supports_fp8=True), case, "cpu")
+
+
+def test_harness_skips_unimplemented_kernel() -> None:
+    def scaffold(*args, **kwargs):
+        raise NotImplementedError("body not written")
+
+    with pytest.raises(pytest.skip.Exception, match="not implemented yet: body not written"):
+        check_kernel(KernelSpec("scaffold", scaffold), HARNESS_CASES[0], "cpu")
 
 
 def test_harness_skips_fp8_for_fp16_only_kernel() -> None:

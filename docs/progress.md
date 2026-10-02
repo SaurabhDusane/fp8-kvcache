@@ -274,3 +274,24 @@ physical layout for experiments). FP8 scales **per KV head**, static, fp32, shap
 
 **Next step**
 - Day 4: kernel v0 (P10a scaffold, Saurabh writes the body).
+
+## 2026-10-02 · Day 4 · P10a v0 scaffold
+
+**Done**
+- `src/kvcache/kernels/v0_fp16_paged.py`: registered as `v0_fp16_paged` (fp16 only). Launcher
+  validates inputs (dtypes, shapes, GQA divisibility, power-of-2 block size, int32 tables,
+  same device, CPU only under TRITON_INTERPRET=1, no scales), allocates the output, grid
+  `(batch, num_q_heads)`, passes all strides (stride-generic NHD/HND). `@triton.jit` kernel
+  with the full signature (pointers, scalars, q/out/K/V/block-table strides, constexprs
+  HEAD_DIM, BLOCK_D = next pow2, BLOCK_SIZE), docstring (online softmax recurrence, masking
+  rules), pointer-arithmetic comments incl. the int64 cast for the block offset. Body = TODO;
+  the launcher raises NotImplementedError before the launch.
+- Test harness: NotImplementedError → skip "not implemented yet" (suite stays green).
+- `tests/test_v0_launcher.py`: registration + validation errors; tolerant of the body landing.
+
+**Verified on CPU**
+- Empty kernel launched under the interpreter with the launcher's exact argument list
+  (NHD and HND strides): signature and launch line up.
+
+**Next step**
+- Saurabh writes the kernel body locally; then P10b review.
