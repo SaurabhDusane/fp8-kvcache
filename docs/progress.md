@@ -64,3 +64,38 @@ waiting on a local run, open issues, next step.
 
 **Next step**
 - P3: `scripts/peak_bw.py` (roofline ceiling).
+
+## 2026-10-02 · Day 1 · P3 Peak bandwidth
+
+**Done**
+- `bench/kernels/bw_kernels.py`: Triton copy kernel and read-only grid-stride sum kernel
+  (fp32 accumulation, one partial per program).
+- `scripts/peak_bw.py`: torch copy / Triton copy / Triton reduce at 256, 512, 1024 MiB (fp16),
+  sizes skipped if free VRAM < 2×size + 768 MiB reserve. Bytes: copy = 2N, reduce = N + 4 B/program.
+  `do_bench` (L2 flushed per call), 5 interleaved rounds with rotated method order, GPU monitor
+  on; per-call SM-clock median and throttle flag. Correctness check of all three methods before
+  timing. Saves JSON (`metrics.read_peak_gbps` is the decode ceiling), writes
+  `bench/results/summary/peak_bw.md` from the saved JSON, prints it. `--from-json` rebuilds it.
+- Spec constant 432 GB/s (RTX 4080 Laptop, 192-bit GDDR6 @ 18 Gbps) marked UNVERIFIED; the run
+  records nvidia-smi's max memory clock for cross-checking.
+- New pytest tier `interpreter`: auto-enabled (TRITON_INTERPRET=1) when CUDA is unavailable;
+  on the GPU machine run `TRITON_INTERPRET=1 pytest -m interpreter`. gpu tests skip under it.
+- `GpuMonitor.elapsed()` and `MonitorResult.window_median()` for per-measurement clocks.
+
+**Verified on CPU**
+- `pytest -q`: 55 passed, 2 skipped (gpu). Interpreter tests check both kernels exactly
+  (integer-valued fp16 → exact sums), incl. masked tails and grid-stride with uneven blocks.
+  A deliberately broken grid stride fails 3 of them.
+- Summary generation from a saved JSON (synthetic numbers, test only); script exits 0 without CUDA.
+
+**Waiting on local run**
+- `peak_bw.py` on the GPU (plugged in, Best performance). Pasted summary: TODO.
+- Earlier: env_check output, gpu_monitor_demo output: TODO.
+
+**Open issues**
+- Spec bandwidth unverified (see above).
+- Reduce grid = 4 programs/SM (8 warps each) is a guess; if the read-only number looks low vs
+  copy, try `--reduce-programs-per-sm 2/6/8`.
+
+**Next step**
+- Day 2, P4: serving load generator.

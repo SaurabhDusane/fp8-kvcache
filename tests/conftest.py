@@ -1,13 +1,22 @@
 """Shared pytest configuration.
 
-Tests marked ``@pytest.mark.gpu`` are skipped automatically when CUDA is unavailable
-(including when torch itself is not installed), so the same suite runs in the CPU-only
-cloud sandbox and on the local GPU machine.
+Tiers:
+- ``gpu``: needs CUDA. Skipped automatically when CUDA (or torch) is unavailable, and when
+  running under the Triton interpreter.
+- ``interpreter``: Triton kernels run by the interpreter on CPU tensors (small shapes).
+  Needs TRITON_INTERPRET=1 *before triton is imported*, because ``@triton.jit`` (including
+  triton.language helpers such as ``tl.zeros``) picks interpreted vs compiled at import time.
+  On a machine without CUDA this conftest sets it automatically, so plain ``pytest`` runs the
+  interpreter tier. On the GPU machine run it explicitly:
+      TRITON_INTERPRET=1 pytest -m interpreter
 """
 
 from __future__ import annotations
 
 import functools
+import os
+import sys
+import warnings
 
 import pytest
 
@@ -27,13 +36,33 @@ def cuda_status() -> tuple[bool, str]:
     return False, "CUDA is not available"
 
 
+def _interpreter_on() -> bool:
+    return os.environ.get("TRITON_INTERPRET") == "1"
+
+
+def _configure_interpreter() -> None:
+    if "TRITON_INTERPRET" in os.environ or cuda_status()[0]:
+        return
+    if "triton" in sys.modules:
+        warnings.warn("triton was imported before conftest; interpreter tests may fail")
+    os.environ["TRITON_INTERPRET"] = "1"
+
+
+_configure_interpreter()  # at conftest import, before any test module imports triton
+
+
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
-    gpu_items = [item for item in items if "gpu" in item.keywords]
-    if not gpu_items:
-        return
     available, reason = cuda_status()
-    if available:
-        return
-    skip_gpu = pytest.mark.skip(reason=f"gpu test skipped: {reason}")
-    for item in gpu_items:
-        item.add_marker(skip_gpu)
+    interp = _interpreter_on()
+    skip_gpu = None
+    if not available:
+        skip_gpu = pytest.mark.skip(reason=f"gpu test skipped: {reason}")
+    elif interp:
+        skip_gpu = pytest.mark.skip(reason="gpu test skipped: running under TRITON_INTERPRET=1")
+    skip_interp = pytest.mark.skip(
+        reason="interpreter test: run with TRITON_INTERPRET=1 pytest -m interpreter")
+    for item in items:
+        if "gpu" in item.keywords and skip_gpu is not None:
+            item.add_marker(skip_gpu)
+        if "interpreter" in item.keywords and not interp:
+            item.add_marker(skip_interp)

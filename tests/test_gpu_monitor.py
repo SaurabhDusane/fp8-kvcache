@@ -141,3 +141,13 @@ def test_monitor_real_subprocess_path_with_fake_nvidia_smi(
     assert r.errors == 0 and len(r.samples) >= 2
     assert r.summary["sm_clock_mhz"]["median"] == 2400.0
     assert r.summary["util_pct"]["max"] == 97.0
+
+
+def test_window_median_and_elapsed() -> None:
+    r = MonitorResult(samples=[{"t": 0.0, "sm_clock_mhz": 2600.0}, {"t": 0.2, "sm_clock_mhz": 2000.0},
+                               {"t": 0.4, "sm_clock_mhz": 1800.0}, {"t": 0.6, "sm_clock_mhz": None}])
+    assert r.window_median("sm_clock_mhz", 0.1, 0.5) == 1900.0
+    assert r.window_median("sm_clock_mhz", 0.55, 1.0) is None
+    with GpuMonitor(interval_s=0.01, query_fn=lambda: LINES[0]) as mon:
+        time.sleep(0.03)
+        assert 0.03 <= mon.elapsed() < 5

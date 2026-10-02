@@ -105,6 +105,12 @@ class MonitorResult:
         ts = [s["t"] for s in self.samples]
         return statistics.median(b - a for a, b in zip(ts, ts[1:]))
 
+    def window_median(self, field_name: str, t_start: float, t_end: float) -> float | None:
+        """Median of `field_name` over samples with t in [t_start, t_end] (monitor seconds)."""
+        vals = [s[field_name] for s in self.samples
+                if t_start <= s["t"] <= t_end and s.get(field_name) is not None]
+        return statistics.median(vals) if vals else None
+
     def throttle(self, session_max_sm_mhz: float | None = None) -> dict[str, Any]:
         sm = self.summary["sm_clock_mhz"]
         ref = session_max_sm_mhz or self.session_max_sm_mhz or sm["max"]
@@ -181,6 +187,7 @@ class GpuMonitor:
     def start(self) -> "GpuMonitor":
         self.result = MonitorResult(interval_s=self.interval_s)
         self._stop.clear()
+        self._t0 = time.perf_counter()
         if self._query_fn is None:
             if shutil.which("nvidia-smi") is None:
                 msg = "gpu_monitor: nvidia-smi not found; returning empty GPU samples"
@@ -188,7 +195,6 @@ class GpuMonitor:
                 warnings.warn(msg, RuntimeWarning, stacklevel=2)
                 return self
             self._query_fn = self._default_query
-        self._t0 = time.perf_counter()
         self._thread = threading.Thread(target=self._loop, name="gpu-monitor", daemon=True)
         self._thread.start()
         return self
@@ -201,6 +207,10 @@ class GpuMonitor:
             self._sample_once()  # final sample at the end of the measured region
             self.result.duration_s = round(time.perf_counter() - self._t0, 4)
         return self.result
+
+    def elapsed(self) -> float:
+        """Seconds since start(), on the same clock as the samples' "t" field."""
+        return time.perf_counter() - self._t0
 
     def __enter__(self) -> "GpuMonitor":
         return self.start()

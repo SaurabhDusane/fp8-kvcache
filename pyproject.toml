@@ -47,4 +47,5 @@ addopts = "-ra --strict-markers"
 markers = [
     "slow: long-running tests (large contexts, sweeps); deselect with -m 'not slow'",
     "gpu: requires a CUDA GPU; auto-skipped when CUDA is unavailable",
+    "interpreter: Triton kernels under TRITON_INTERPRET=1 on CPU tensors (auto-enabled without CUDA)",
 ]
