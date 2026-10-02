@@ -34,6 +34,7 @@ cpu-dev = [
     "kvcache[dev]",
     "torch",
     "triton",
+    "transformers",  # tiny random-config model tests only (the GPU machine has it via vLLM)
 ]
 
 [tool.setuptools.packages.find]

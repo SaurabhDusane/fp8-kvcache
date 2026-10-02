@@ -66,3 +66,15 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
             item.add_marker(skip_gpu)
         if "interpreter" in item.keywords and not interp:
             item.add_marker(skip_interp)
+
+
+@pytest.fixture
+def captured_kv_dir():
+    """tests/data with real captured KV (scripts/capture_kv.py on the GPU machine); skips the
+    test if the capture hasn't been run."""
+    from bench.kernels.kv_capture import DATA_DIR, read_manifest
+
+    manifest = read_manifest(DATA_DIR)
+    if manifest is None or not all((DATA_DIR / f).exists() for f in manifest["files"]):
+        pytest.skip("no captured KV in tests/data (run scripts/capture_kv.py on the GPU machine)")
+    return DATA_DIR, manifest

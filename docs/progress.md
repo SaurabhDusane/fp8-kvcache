@@ -212,3 +212,35 @@ physical layout for experiments). FP8 scales **per KV head**, static, fp32, shap
 
 **Next step**
 - P8: capture real KV from the model.
+
+## 2026-10-02 · Day 3 · P8 Capture real KV
+
+**Done**
+- `scripts/capture_kv.py`: Qwen2.5-1.5B-Instruct (fp16, SDPA) via transformers on 20 prompts
+  (5 code, 5 chat incl. multi-turn and system persona, 5 math, 2 multilingual, 1 structured
+  JSON, 2 long documents: repo docs and stdlib source, truncated to `--long-doc-tokens` 3000).
+  Prefill + one greedy decode step; K/V read from the cache after that step (post-RoPE, incl.
+  the new token) via a version-tolerant Cache accessor; the decode step's post-RoPE query rebuilt
+  from a pre-hook on self_attn (q_proj + the model's rotary cos/sin). Self-check: our reference
+  attention on the captured q/K/V vs the model's attention output (o_proj input); exit 1 if
+  the worst error > 2e-2.
+- Saves first/middle/last layer (from the config: 0, L//2, L-1) as fp16 `.pt` to tests/data
+  (+ `kv_manifest.json`); stats for all layers saved as `kv_stats` JSON (GPU monitor on) and
+  rendered to `bench/results/summary/kv_stats.md`: per-head amax, amax excluding the first token,
+  rms, top channel, top/median channel amax, top-4 energy share, dominated flag, FP8 subnormal
+  fraction with per-head vs per-tensor scales, self-check errors, file sizes.
+- `bench/kernels/kv_capture.py`: stats, markdown, file format, `load_captured_paged()` into our
+  paged layout (fp16 or fp8); `captured_kv_dir` fixture skips when tests/data is empty.
+
+**Verified on CPU**
+- Stats on synthetic tensors with planted channel / first-token outliers and exact subnormal
+  counts; markdown from a saved record; file round trip into the paged layout + reference vs SDPA.
+- Capture path on a tiny random Qwen2 with transformers 5.18 (CPU): cache accessor, q rebuild,
+  self-check passes; negative control (q without RoPE) fails the check as it should.
+
+**Waiting on local run**
+- `capture_kv.py` with the real model; paste kv_stats.md: TODO. Expected data size: roughly
+  1 KiB per token per saved layer → ~30–40 MiB total (estimate; actual sizes are printed).
+
+**Next step**
+- P9: kernel test suite + quant_error.py.
