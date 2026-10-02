@@ -244,3 +244,33 @@ physical layout for experiments). FP8 scales **per KV head**, static, fp32, shap
 
 **Next step**
 - P9: kernel test suite + quant_error.py.
+
+## 2026-10-02 · Day 3 · P9 Kernel test suite + quant_error
+
+**Done**
+- `src/kvcache/kernels/__init__.py`: registry (`register_kernel`, `KernelSpec` with
+  `supports_fp8`, `scale_granularities`, `interpreter_fp8_skip_reason`), `load_kernels()`
+  auto-imports every `v<N>_*.py` module (import errors propagate), `get_kernel()`.
+- `tests/test_decode_kernel.py`: one `check_kernel` harness (fp16 out vs fp32 reference on the
+  same cache, atol=rtol=1e-2; also shape/dtype/device, finite output = no poison reads, inputs
+  unmodified) driving four tiers over all registered kernels: interpreter (9 tiny CPU cases incl.
+  fp8 and HND), gpu (101 cases: head_dim {64,128} × GQA {1,4,6,8} × block {16,32} × {fp16,fp8}
+  × 3 batch patterns incl. batch 64 ragged up to 2048 with length 1, plus HND and sm_scale cases),
+  slow (7 cases up to 32k), captured real KV (fp16/fp8 × layers × block {16,32}).
+  Zero kernels → one "empty parameter set" skip per tier.
+- `bench/kernels/quant_error.py`: fp8 vs fp16 cache, same implementation (reference by default
+  or `--impl <kernel>`), per layer (and optionally per granularity): max abs, mean abs, max abs
+  relative, cosine, worst-prompt cosine; saves JSON, writes summary/quant_error.md, prints it.
+
+**Verified on CPU**
+- Harness accepts a reference-backed kernel and rejects 6 deliberately broken ones (drops last
+  token, wrong GQA mapping, reads padding, ignores scales, fp32 output, mutates cache).
+- A temporary `v99_*.py` kernel file was auto-discovered: 9 interpreter cases ran and passed,
+  110 GPU cases collected (then removed).
+- quant_error on a synthetic capture (all 4 granularities); exact error math on hand-made tensors.
+
+**Waiting on local run**
+- `python -m bench.kernels.quant_error` on the real capture: paste summary (TODO).
+
+**Next step**
+- Day 4: kernel v0 (P10a scaffold, Saurabh writes the body).
