@@ -1,0 +1,50 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "kvcache"
+version = "0.1.0"
+description = "Quantized (FP8), tiered KV-cache for LLM inference: Triton paged decode kernel + benchmarks"
+readme = "README.md"
+requires-python = ">=3.11"
+# IMPORTANT: torch, triton, vllm and flashinfer are deliberately NOT listed here.
+# The local GPU machine has CUDA builds of these installed; installing this package
+# must never replace them. See CLAUDE.md -> "Dependencies".
+dependencies = []
+
+[project.optional-dependencies]
+# Light tools. Local GPU machine: installed by scripts/setup_local.sh (never via this extra
+# together with cpu-dev).
+dev = [
+    "pytest>=8",
+    "numpy",
+    "pandas",
+    "matplotlib",
+    "httpx",
+    "openai",
+    "datasets",
+]
+# Cloud sandbox ONLY (no GPU). Install with the CPU wheel index taking priority
+# (uv prefers --extra-index-url over --index-url):
+#   uv pip install -e ".[cpu-dev]" \
+#       --extra-index-url https://download.pytorch.org/whl/cpu
+# Never install this extra on the local GPU machine.
+cpu-dev = [
+    "kvcache[dev]",
+    "torch",
+    "triton",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# Repo root on sys.path so `bench.*` and `scripts.*` are importable from tests.
+pythonpath = ["."]
+addopts = "-ra --strict-markers"
+markers = [
+    "slow: long-running tests (large contexts, sweeps); deselect with -m 'not slow'",
+    "gpu: requires a CUDA GPU; auto-skipped when CUDA is unavailable",
+]

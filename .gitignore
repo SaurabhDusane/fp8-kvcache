@@ -1,0 +1,45 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Environments
+.venv/
+venv/
+.env
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+
+# Benchmark raw results (local only; summaries in bench/results/summary/ are committed)
+bench/results/raw/
+
+# Captured real KV tensors (local GPU only)
+tests/data/*.pt
+
+# Model / compiler caches
+.cache/
+hf_cache/
+huggingface/
+models/
+*.safetensors
+.triton/
+torch_compile_cache/
+torchinductor_*/
+vllm_cache/
+.flashinfer/
+
+# Profiler outputs
+*.ncu-rep
+*.nsys-rep
+*.qdrep
