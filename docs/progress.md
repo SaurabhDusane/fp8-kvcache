@@ -99,3 +99,46 @@ waiting on a local run, open issues, next step.
 
 **Next step**
 - Day 2, P4: serving load generator.
+
+## 2026-10-02 · Day 2 · P4 Serving load generator
+
+**Done**
+- `bench/serving/`:
+  - `loadgen.py`: httpx async streaming chat completions (`stream_options.include_usage`,
+    `ignore_eos`, `temperature 0`); per request: scheduled/send time, first-content-chunk time,
+    every content-chunk arrival, end time, client-measured prompt tokens, server usage tokens,
+    errors. Arrivals: Poisson session starts (seeded) or all at t=0; optional session
+    concurrency cap (rate inf + cap = closed loop). Multi-turn turns are sequential with think time.
+    Warmup requests (separate prompts) run first and are excluded.
+  - `metrics.py`: TTFT, ITL (pooled chunk gaps, same as `vllm bench serve`), TPOT, E2E,
+    req/s, output/input tok/s, goodput (TTFT ≤ X AND per-request p90 ITL ≤ Y), send lag,
+    output-length mismatch counter (catches ignore_eos not honoured).
+  - `traces.py`: `chat` (ShareGPT via `datasets`, then hub download, else lognormal fallback;
+    source + reason recorded), `long_context` (2000–3500 prompt, 32–128 out), `multi_turn`
+    (3–6 turns, full conversation resent, deterministic stand-in assistant replies of the
+    requested length, exponential think time), `fixed` (for apples-to-apples with
+    `vllm bench serve --dataset-name random`). Lengths measured with the model tokenizer incl.
+    chat template.
+  - `run.py` CLI (`python -m bench.serving.run ...`), GPU monitor on, saves `serving_<trace>`.
+  - `fake_server.py`: stdlib asyncio OpenAI-compatible streaming server with configurable
+    TTFT/ITL/prefill delay, failure injection, EOS behaviour; records requests and peak concurrency.
+- `datasets>=3` pinned in the dev extra and `setup_local.sh` (uv had resolved datasets 2.14,
+  which crashes on import with pyarrow ≥ 21).
+
+**Verified on CPU**
+- `pytest -q`: all serving tests pass against the fake server: metrics match injected delays
+  (TTFT 50 ms / ITL 10 ms), role-only first chunk not counted as first token, request body
+  (max_tokens, ignore_eos, include_usage), concurrency cap, Poisson send times, multi-turn
+  ordering and growing prefix, HTTP errors, warmup exclusion, CLI end to end + saved JSON.
+- Exact metric math on hand-built records; trace determinism and length bounds (stub tokenizer).
+
+**Not verified (needs local run)**
+- Real Qwen tokenizer + vLLM: TTFT/ITL vs `vllm bench serve`, ignore_eos honoured, usage chunk.
+- ShareGPT loading through `datasets` (not attempted here: ~670 MB download).
+
+**Open issues**
+- The concurrency cap counts sessions (users), not requests; for single-turn traces these are
+  the same.
+
+**Next step**
+- P5: baseline sweep (fp16 vs fp8 KV cache).

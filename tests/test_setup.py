@@ -50,7 +50,7 @@ def test_setup_local_never_installs_gpu_stack() -> None:
         for pkg in ("torch", "triton", "vllm", "flashinfer"):
             assert not re.search(rf"\b{pkg}\b", line), line
     light = re.search(r"LIGHT_TOOLS=\((.*)\)", script)
-    assert light and set(light.group(1).split()) == {
+    assert light and {_dist_name(t.strip('"')) for t in light.group(1).split()} == {
         "pytest", "numpy", "pandas", "matplotlib", "httpx", "openai", "datasets"
     }
 

@@ -29,7 +29,7 @@ else
 fi
 echo "Using python: $PY"
 
-LIGHT_TOOLS=(pytest numpy pandas matplotlib httpx openai datasets)
+LIGHT_TOOLS=(pytest numpy pandas matplotlib httpx openai "datasets>=3")
 
 # Prints "dist==version" for each installed protected package (nothing if not installed).
 snapshot_protected() {

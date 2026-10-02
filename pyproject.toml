@@ -23,7 +23,7 @@ dev = [
     "matplotlib",
     "httpx",
     "openai",
-    "datasets",
+    "datasets>=3",  # older versions break with pyarrow>=21 (PyExtensionType removed)
 ]
 # Cloud sandbox ONLY (no GPU). Install with the CPU wheel index taking priority
 # (uv prefers --extra-index-url over --index-url):
